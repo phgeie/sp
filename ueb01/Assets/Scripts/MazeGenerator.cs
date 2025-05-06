@@ -82,7 +82,7 @@ public class MazeGenerator:MonoBehaviour
 
         // Pick exit (farthest)
         var exit = FindFarthestEdge(maze, entrance);
-        maze[exit.y, exit.x] = 0;
+        maze[exit.y, exit.x] = 2;
 
         return maze;
     }

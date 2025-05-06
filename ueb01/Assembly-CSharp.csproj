@@ -67,6 +67,7 @@
     <Compile Include="Assets\Scripts\CoinSpin.cs" />
     <Compile Include="Assets\Scripts\NewBehaviourScript.cs" />
     <Compile Include="Assets\Scripts\MazeGenerator.cs" />
+    <Compile Include="Assets\Scripts\CoinPickup.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
