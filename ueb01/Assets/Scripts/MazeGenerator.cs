@@ -8,12 +8,16 @@ public class MazeGenerator:MonoBehaviour
     [Header("Prefabs")]
     public GameObject WallPrefab;
     public GameObject GroundPrefab;
+    public GameObject CeilingPrefab;
     public GameObject CoinPrefab;
+    public GameObject ExitPrefab;
+    public GameObject LightPrefab;
 
     [Header("Maze Settings")]
-    public int MazeWidth = 21;
-    public int MazeHeight = 21;
-    public float CellSize = 1f;
+    private int MazeWidth = 6;
+    private int MazeHeight = 6;
+    private float CellSize = 1f;
+
 
     void Start()
     {
@@ -224,6 +228,17 @@ public class MazeGenerator:MonoBehaviour
         Vector3 groundPos = new Vector3((width - 1) * CellSize / 2f, -0.5f, (height - 1) * CellSize / 2f);
         GameObject ground = Instantiate(GroundPrefab, groundPos, Quaternion.identity);
 
+        // Instantiate ceiling
+        Vector3 ceilingPos = new Vector3((width - 1) * CellSize / 2f, 1.5f, (height - 1) * CellSize / 2f); // Y = height above walls
+        GameObject ceiling = Instantiate(CeilingPrefab, ceilingPos, Quaternion.Euler(180f, 0f, 0f)); // Flip upside down
+
+        Vector3 ceilingScale = ceiling.transform.localScale;
+        ceiling.transform.localScale = new Vector3(
+            ceilingScale.x * width * CellSize,
+            ceilingScale.y,
+            ceilingScale.z * height * CellSize
+        );
+
         // Multiply the original prefab's localScale
         Vector3 originalScale = ground.transform.localScale;
         ground.transform.localScale = new Vector3(
@@ -232,15 +247,42 @@ public class MazeGenerator:MonoBehaviour
             originalScale.z * height * CellSize
         );
 
-        // Spawn Walls
-        for (int y = 0; y < height; y++)
+        int openCellCounter = 0;
+
+        for (int y = 0; y < height; y++){
+            for (int x = 0; x < width; x++){
+                if (maze[y, x] == 0)
         {
-            for (int x = 0; x < width; x++)
+            openCellCounter++;
+
+            if (openCellCounter % 5 == 0) // every other open cell
             {
-                if (maze[y, x] == 1)
-                {
+                Vector3 lightPos = new Vector3(x * CellSize, 1.4f, y * CellSize);
+                Instantiate(LightPrefab, lightPos, Quaternion.identity, transform);
+            }
+        }else if (maze[y, x] == 1){
                     Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
                     Instantiate(WallPrefab, pos, Quaternion.identity, transform);
+                }else if (maze[y, x] == 2){
+                    Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
+    
+                    Vector3 mazeCenter = new Vector3((width - 1) * CellSize / 2f, 0f, (height - 1) * CellSize / 2f);
+Vector3 dir = (mazeCenter - pos).normalized;
+
+Quaternion rotation;
+
+// Snap direction to cardinal axis
+if (Mathf.Abs(dir.x) > Mathf.Abs(dir.z))
+{
+    rotation = dir.x > 0 ? Quaternion.Euler(0, 90, 0) : Quaternion.Euler(0, -90, 0); // East or West
+}
+else
+{
+    rotation = dir.z > 0 ? Quaternion.Euler(0, 0, 0) : Quaternion.Euler(0, 180, 0); // North or South
+}
+
+Instantiate(ExitPrefab, pos, rotation, transform);
+
                 }
             }
         }
@@ -268,7 +310,7 @@ public class MazeGenerator:MonoBehaviour
     // Randomly choose one
     System.Random rand = new System.Random();
     var (cx, cy) = emptyCells[rand.Next(emptyCells.Count)];
-    Vector3 pos = new Vector3(cx * CellSize, 0.5f, cy * CellSize);
+    Vector3 pos = new Vector3(cx * CellSize, 0f, cy * CellSize);
 
     Instantiate(CoinPrefab, pos, CoinPrefab.transform.rotation, transform);
 }

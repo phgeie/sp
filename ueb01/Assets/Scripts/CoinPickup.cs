@@ -13,14 +13,10 @@ public class CoinPickup : MonoBehaviour
     private bool invoked = false;
     private Vector3 targetPosition;
     private AudioSource audioSource;
+    public string exitTag = "Exit"; 
 
     void Start()
     {
-        if (objectToMove != null)
-        {
-            targetPosition = objectToMove.transform.position + Vector3.up * moveDistance;
-        }
-
         // Set up audio source
         audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.clip = pickupSound;
@@ -33,6 +29,11 @@ public class CoinPickup : MonoBehaviour
         {
             isCollected = true;
             Debug.Log("PICK IT UP");
+
+            
+            objectToMove = GameObject.FindGameObjectWithTag(exitTag);
+            
+            targetPosition = objectToMove.transform.position + Vector3.up * moveDistance;
 
             if (pickupSound != null)
             {
@@ -55,13 +56,15 @@ public class CoinPickup : MonoBehaviour
                 targetPosition,
                 moveSpeed * Time.deltaTime
             );
-        }
-        if (objectToMove.transform.position == targetPosition){
+
+            if (objectToMove.transform.position == targetPosition){
             if (!invoked){
                 invoked = true;
                 Invoke("DestroyCoin", pickupSound != null ? pickupSound.length : 0f);
             }
         }
+        }
+        
     }
 
     void DestroyCoin()
