@@ -5,8 +5,8 @@ using UnityEngine;
 public class CoinPickup : MonoBehaviour
 {
     public AudioClip pickupSound; // Sound to play on pickup
-    public GameObject objectToMove; // Object that moves up
-    private float moveDistance = 2f; // How far to move the object
+    private GameObject objectToMove; // Object that moves up
+    private float moveDistance = 2.1f; // How far to move the object
     private float moveSpeed = 1f; // Speed of movement
 
     private bool isCollected = false;

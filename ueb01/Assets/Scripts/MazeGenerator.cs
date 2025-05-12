@@ -3,37 +3,46 @@ using System.Collections.Generic;
 using UnityEngine;
 using System;
 
-public class MazeGenerator:MonoBehaviour
+public class MazeGenerator : MonoBehaviour
 {
     [Header("Prefabs")]
     public GameObject WallPrefab;
+    public GameObject MirrorPrefab;
+    public GameObject TransparentPrefab;
     public GameObject GroundPrefab;
     public GameObject CeilingPrefab;
     public GameObject CoinPrefab;
     public GameObject ExitPrefab;
     public GameObject LightPrefab;
+    public GameObject Player;
 
     [Header("Maze Settings")]
-    private int MazeWidth = 6;
-    private int MazeHeight = 6;
+    private int MazeWidth = 10;
+    private int MazeHeight = 10;
     private float CellSize = 1f;
 
+    private int[,] maze;
+
+    private (int x, int y) entrance;
 
     void Start()
     {
-        int[,] maze = GenerateMaze(MazeWidth, MazeHeight);
-        PrintMaze(maze);
-        SpawnMaze(maze);
-        SpawnCoin(maze);
+        GenerateMaze(MazeWidth, MazeHeight);
+        PlaceLightsInMaze();
+        ReplaceSomeWalls();
+        SpawnMaze();
+        PrintMaze();
+        SpawnCoin();
+        BuildEntranceRoom(new Vector2Int(entrance.x, entrance.y), 3, WallPrefab);
 
     }
 
-    public int[,] GenerateMaze(int width, int height)
+    public void GenerateMaze(int width, int height)
     {
         if (width % 2 == 0) width++;
         if (height % 2 == 0) height++;
 
-        int[,] maze = new int[height, width];
+        maze = new int[height, width];
 
         // Fill with walls
         for (int y = 0; y < height; y++)
@@ -78,20 +87,46 @@ public class MazeGenerator:MonoBehaviour
         }
 
         // Add loops for complexity
-        AddLoops(maze, rand, 0.05f); // 5% chance to break extra wall
+        AddLoops(rand, 0.05f); // 5% chance to break extra wall
 
         // Pick entrance
-        var entrance = PickRandomEdge(maze, rand);
+        entrance = PickRandomEdge(rand);
         maze[entrance.y, entrance.x] = 0;
 
         // Pick exit (farthest)
-        var exit = FindFarthestEdge(maze, entrance);
+        var exit = FindFarthestEdge(entrance);
         maze[exit.y, exit.x] = 2;
-
-        return maze;
     }
 
-    private void AddLoops(int[,] maze, System.Random rand, float loopChance)
+    public void ReplaceSomeWalls()
+    {
+        float mirrorChance = 0.1f;
+        float transparentChance = 0.05f;
+        int width = maze.GetLength(0);
+        int height = maze.GetLength(1);
+        System.Random rng = new System.Random();
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (maze[x, y] != 1) continue; // only replace solid walls
+
+                bool isBorder = x == 0 || y == 0 || x == width - 1 || y == height - 1;
+
+                if (!isBorder && rng.NextDouble() < transparentChance)
+                {
+                    maze[x, y] = 4; // transparent wall
+                }
+                else if (rng.NextDouble() < mirrorChance)
+                {
+                    maze[x, y] = 3; // mirror wall
+                }
+            }
+        }
+    }
+
+    private void AddLoops(System.Random rand, float loopChance)
     {
         int height = maze.GetLength(0);
         int width = maze.GetLength(1);
@@ -119,7 +154,7 @@ public class MazeGenerator:MonoBehaviour
         }
     }
 
-    private (int x, int y) PickRandomEdge(int[,] maze, System.Random rand)
+    private (int x, int y) PickRandomEdge(System.Random rand)
     {
         int height = maze.GetLength(0);
         int width = maze.GetLength(1);
@@ -140,7 +175,7 @@ public class MazeGenerator:MonoBehaviour
         return candidates[rand.Next(candidates.Count)];
     }
 
-    private (int x, int y) FindFarthestEdge(int[,] maze, (int x, int y) start)
+    private (int x, int y) FindFarthestEdge((int x, int y) start)
     {
         int height = maze.GetLength(0);
         int width = maze.GetLength(1);
@@ -200,7 +235,7 @@ public class MazeGenerator:MonoBehaviour
         return farthest; // fallback
     }
 
-    public void PrintMaze(int[,] maze)
+    public void PrintMaze()
     {
         int height = maze.GetLength(0);
         int width = maze.GetLength(1);
@@ -209,17 +244,83 @@ public class MazeGenerator:MonoBehaviour
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
-                if(maze[y, x] == 1)
+                if (maze[y, x] == 1)
                     s += "<";
-                else
+                else if (maze[y, x] == 5)
+                {
+                    s += "-";
+                }
+                else if (maze[y, x] == 0)
+                {
                     s += "0";
-                s += "\n";
+                }
+                else if (maze[y, x] == 3)
+                {
+                    s += "M";
+                }
+                else if (maze[y, x] == 4)
+                {
+                    s += "T";
+                }
+                else
+                {
+                    s += "E";
+
+                }
+            s += "\n";
         }
         Debug.Log(s);
     }
 
-    
-    void SpawnMaze(int[,] maze)
+    public void PlaceLightsInMaze()
+    {
+        int width = maze.GetLength(0);
+        int height = maze.GetLength(1);
+
+        // Horizontal pass
+        for (int y = 0; y < height; y++)
+        {
+            int counter = 0;
+            for (int x = 0; x < width; x++)
+            {
+                if (maze[x, y] == 0)
+                {
+                    counter++;
+                    if (counter % 2 == 0)
+                    {
+                        maze[x, y] = 5;
+                    }
+                }
+                else
+                {
+                    counter = 0;
+                }
+            }
+        }
+
+        // Vertical pass
+        for (int x = 0; x < width; x++)
+        {
+            int counter = 0;
+            for (int y = 0; y < height; y++)
+            {
+                if (maze[x, y] == 0)
+                {
+                    counter++;
+                    if (counter % 2 == 0)
+                    {
+                        maze[x, y] = 5;
+                    }
+                }
+                else
+                {
+                    counter = 0;
+                }
+            }
+        }
+    }
+
+    void SpawnMaze()
     {
         int height = maze.GetLength(0);
         int width = maze.GetLength(1);
@@ -247,72 +348,164 @@ public class MazeGenerator:MonoBehaviour
             originalScale.z * height * CellSize
         );
 
-        int openCellCounter = 0;
 
-        for (int y = 0; y < height; y++){
-            for (int x = 0; x < width; x++){
-                if (maze[y, x] == 0)
+        for (int y = 0; y < height; y++)
         {
-            openCellCounter++;
-
-            if (openCellCounter % 5 == 0) // every other open cell
+            for (int x = 0; x < width; x++)
             {
-                Vector3 lightPos = new Vector3(x * CellSize, 1.4f, y * CellSize);
-                Instantiate(LightPrefab, lightPos, Quaternion.identity, transform);
-            }
-        }else if (maze[y, x] == 1){
+                if (maze[y, x] == 4)
+                {
+                    Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
+                    Instantiate(TransparentPrefab, pos, Quaternion.identity, transform);
+                }
+                else if (maze[y, x] == 3)
+                {
+                    Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
+                    Instantiate(MirrorPrefab, pos, Quaternion.identity, transform);
+                }
+                else if (maze[y, x] == 5)
+                {
+                    Vector3 lightPos = new Vector3(x * CellSize, 1.5f, y * CellSize);
+                    Instantiate(LightPrefab, lightPos, Quaternion.Euler(90f, 0f, 0f), transform);
+
+                }
+                else if (maze[y, x] == 1)
+                {
                     Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
                     Instantiate(WallPrefab, pos, Quaternion.identity, transform);
-                }else if (maze[y, x] == 2){
+                }
+                else if (maze[y, x] == 2)
+                {
                     Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
-    
+
                     Vector3 mazeCenter = new Vector3((width - 1) * CellSize / 2f, 0f, (height - 1) * CellSize / 2f);
-Vector3 dir = (mazeCenter - pos).normalized;
+                    Vector3 dir = (mazeCenter - pos).normalized;
 
-Quaternion rotation;
+                    Quaternion rotation;
 
-// Snap direction to cardinal axis
-if (Mathf.Abs(dir.x) > Mathf.Abs(dir.z))
-{
-    rotation = dir.x > 0 ? Quaternion.Euler(0, 90, 0) : Quaternion.Euler(0, -90, 0); // East or West
-}
-else
-{
-    rotation = dir.z > 0 ? Quaternion.Euler(0, 0, 0) : Quaternion.Euler(0, 180, 0); // North or South
-}
+                    // Snap direction to cardinal axis
+                    if (Mathf.Abs(dir.x) > Mathf.Abs(dir.z))
+                    {
+                        rotation = dir.x > 0 ? Quaternion.Euler(0, 90, 0) : Quaternion.Euler(0, -90, 0); // East or West
+                    }
+                    else
+                    {
+                        rotation = dir.z > 0 ? Quaternion.Euler(0, 0, 0) : Quaternion.Euler(0, 180, 0); // North or South
+                    }
 
-Instantiate(ExitPrefab, pos, rotation, transform);
+                    Instantiate(ExitPrefab, pos, rotation, transform);
 
                 }
             }
         }
     }
 
-    void SpawnCoin(int[,] maze)
-{
-    int height = maze.GetLength(0);
-    int width = maze.GetLength(1);
-    List<(int x, int y)> emptyCells = new();
-
-    // Collect all empty path cells
-    for (int y = 1; y < height - 1; y++)
+    void SpawnCoin()
     {
-        for (int x = 1; x < width - 1; x++)
+        int height = maze.GetLength(0);
+        int width = maze.GetLength(1);
+        List<(int x, int y)> emptyCells = new();
+
+        // Collect all empty path cells
+        for (int y = 1; y < height - 1; y++)
         {
-            if (maze[y, x] == 0)
-                emptyCells.Add((x, y));
+            for (int x = 1; x < width - 1; x++)
+            {
+                if (maze[y, x] == 0)
+                    emptyCells.Add((x, y));
+            }
         }
+
+        if (emptyCells.Count == 0)
+            return;
+
+        // Randomly choose one
+        System.Random rand = new System.Random();
+        var (cx, cy) = emptyCells[rand.Next(emptyCells.Count)];
+        Vector3 pos = new Vector3(cx * CellSize, 0f, cy * CellSize);
+
+        Instantiate(CoinPrefab, pos, CoinPrefab.transform.rotation, transform);
     }
 
-    if (emptyCells.Count == 0)
-        return;
 
-    // Randomly choose one
-    System.Random rand = new System.Random();
-    var (cx, cy) = emptyCells[rand.Next(emptyCells.Count)];
-    Vector3 pos = new Vector3(cx * CellSize, 0f, cy * CellSize);
+    public void BuildEntranceRoom(Vector2Int entranceVector, int roomSize, GameObject wallPrefab)
+    {
+        Vector2Int dir = GetRoomOffsetDirection(entranceVector); // Direction facing maze
+        Vector2Int roomCenter = entranceVector + dir * 2;         // One tile further from entrance
 
-    Instantiate(CoinPrefab, pos, CoinPrefab.transform.rotation, transform);
-}
+        int half = roomSize / 2;
+        Vector3 pos = new Vector3(0, 0, 0);
+        for (int dx = -half; dx <= half; dx++)
+        {
+            for (int dy = -half; dy <= half; dy++)
+            {
+                Vector2Int current = roomCenter + new Vector2Int(dx, dy);
+
+                // Skip center for player space
+                if (dx == 0 && dy == 0) continue;
+
+                // Leave corridor hole facing maze entrance
+                if (dx == -dir.x && dy == -dir.y) continue;
+
+                pos = new Vector3(current.x * CellSize, 0.5f, current.y * CellSize);
+                Instantiate(wallPrefab, pos, Quaternion.identity);
+            }
+        }
+
+
+
+
+        Vector3 groundPos = new Vector3(roomCenter.x, -0.5f, roomCenter.y);
+        GameObject ground = Instantiate(GroundPrefab, groundPos, Quaternion.identity);
+
+        Vector3 originalScale = ground.transform.localScale;
+        ground.transform.localScale = new Vector3(
+            originalScale.x * roomSize * CellSize,
+            originalScale.y,
+            originalScale.z * roomSize * CellSize
+        );
+
+        Vector3 ceilingPos = new Vector3(roomCenter.x, 1.5f, roomCenter.y);
+        GameObject ceiling = Instantiate(CeilingPrefab, ceilingPos, Quaternion.Euler(180f, 0f, 0f)); // Flip upside down
+
+        // Scale ceiling to match room size
+        Vector3 ceilingScale = ceiling.transform.localScale;
+        ceiling.transform.localScale = new Vector3(
+            ceilingScale.x * roomSize * CellSize,
+            ceilingScale.y,
+            ceilingScale.z * roomSize * CellSize
+        );
+
+        // Spawn player inside the room
+        SpawnPlayer(roomCenter, entranceVector - roomCenter);
+    }
+
+
+
+    Vector2Int GetRoomOffsetDirection(Vector2Int entrance)
+    {
+        int width = maze.GetLength(0);
+        int height = maze.GetLength(1);
+
+        if (entrance.x == 0) return new Vector2Int(-1, 0);
+        if (entrance.x == width - 1) return new Vector2Int(1, 0);
+        if (entrance.y == 0) return new Vector2Int(0, -1);
+        if (entrance.y == height - 1) return new Vector2Int(0, 1);
+
+        return Vector2Int.zero; // fallback
+    }
+
+
+    void SpawnPlayer(Vector2Int roomCell, Vector2Int lookDirection)
+    {
+        Vector3 playerPos = new Vector3(roomCell.x * CellSize, 0f, roomCell.y * CellSize);
+        Player.transform.position = playerPos;
+
+        Vector3 forward = new Vector3(lookDirection.x, 0, lookDirection.y);
+        Player.transform.rotation = Quaternion.LookRotation(forward);
+    }
+
+
+
 
 }

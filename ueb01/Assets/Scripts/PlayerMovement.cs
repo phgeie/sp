@@ -4,8 +4,8 @@ using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
 {
-    private float moveSpeed = 5f;  // Speed at which the player moves
-    private float rotationSpeed = 100f;  // Speed at which the player rotates
+    private float moveSpeed = 2.5f;  // Speed at which the player moves
+    private float rotationSpeed = 50f;  // Speed at which the player rotates
     private float cellSize = 0.5f;   // The size of each cell in the maze
 
     private void Update()
