@@ -19,6 +19,7 @@ public class LightSelfController : MonoBehaviour
 
     void UpdateLightState()
     {
+        Debug.Log(lightComponent.enabled);
         if (player == null || lightComponent == null)
             return;
 

@@ -6,6 +6,7 @@ using System;
 public class MazeGenerator : MonoBehaviour
 {
     [Header("Prefabs")]
+    public GameObject ExtraroomPrefab;
     public GameObject WallPrefab;
     public GameObject MirrorPrefab;
     public GameObject TransparentPrefab;
@@ -89,13 +90,28 @@ public class MazeGenerator : MonoBehaviour
         // Add loops for complexity
         AddLoops(rand, 0.05f); // 5% chance to break extra wall
 
-        // Pick entrance
-        entrance = PickRandomEdge(rand);
-        maze[entrance.y, entrance.x] = 0;
 
-        // Pick exit (farthest)
-        var exit = FindFarthestEdge(entrance);
-        maze[exit.y, exit.x] = 2;
+        // Pick exit 
+        // Set exit at bottom-right
+(int x, int y) exit = (width - 1, height - 2);
+
+// Ensure adjacent cell is path
+if (maze[exit.y, exit.x - 1] == 0 || maze[exit.y - 1, exit.x] == 0)
+{
+    maze[exit.y, exit.x] = 2;
+}
+else
+{
+    // Carve a path if not already connected
+    maze[height - 2, width - 2] = 0;
+    maze[height - 2, width - 1] = 2;
+}
+
+
+entrance = FindFarthestEdge(exit);
+maze[entrance.y, entrance.x] = 0;
+
+SpawnPrefabAtExit(exit);
     }
 
     public void ReplaceSomeWalls()
@@ -234,6 +250,16 @@ public class MazeGenerator : MonoBehaviour
 
         return farthest; // fallback
     }
+
+public void SpawnPrefabAtExit((int x, int y) exit)
+{
+    Vector3 exitWorldPos = new Vector3(exit.x, 0f, exit.y);
+    Vector3 entryOffsetInPrefab = new Vector3(-1f, 0f, 4f); // prefab entry relative to its origin
+    Vector3 prefabOrigin = exitWorldPos - entryOffsetInPrefab;
+
+    GameObject instance = Instantiate(ExtraroomPrefab, prefabOrigin, Quaternion.identity);
+}
+
 
     public void PrintMaze()
     {
