@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using System.IO;
 
 public class MazeGenerator : MonoBehaviour
 {
@@ -18,8 +19,8 @@ public class MazeGenerator : MonoBehaviour
     public GameObject Player;
 
     [Header("Maze Settings")]
-    private int MazeWidth = 10;
-    private int MazeHeight = 10;
+    public int MazeWidth = 3;
+    public int MazeHeight = 3;
     private float CellSize = 1f;
 
     private int[,] maze;
@@ -28,6 +29,7 @@ public class MazeGenerator : MonoBehaviour
 
     void Start()
     {
+        if (MazeWidth < 3 || MazeHeight < 3) return;
         GenerateMaze(MazeWidth, MazeHeight);
         PlaceLightsInMaze();
         ReplaceSomeWalls();
@@ -263,6 +265,7 @@ public void SpawnPrefabAtExit((int x, int y) exit)
 
     public void PrintMaze()
     {
+        WriteIntArrayToFile(maze, "maze.txt");
         int height = maze.GetLength(0);
         int width = maze.GetLength(1);
         string s = "";
@@ -433,15 +436,15 @@ public void SpawnPrefabAtExit((int x, int y) exit)
         List<(int x, int y)> emptyCells = new();
 
         // Collect all empty path cells
-        for (int y = 1; y < height - 1; y++)
+        for (int y = 0; y < height; y++)
         {
-            for (int x = 1; x < width - 1; x++)
+            for (int x = 0; x < width; x++)
             {
-                if (maze[y, x] == 0)
+                if (maze[y, x] == 0 || maze[y, x] == 5)
                     emptyCells.Add((x, y));
             }
         }
-
+        Debug.Log(emptyCells.Count);
         if (emptyCells.Count == 0)
             return;
 
@@ -529,6 +532,31 @@ public void SpawnPrefabAtExit((int x, int y) exit)
 
         Vector3 forward = new Vector3(lookDirection.x, 0, lookDirection.y);
         Player.transform.rotation = Quaternion.LookRotation(forward);
+    }
+
+    
+    public void WriteIntArrayToFile(int[,] array, string fileName)
+    {
+        string path = Path.Combine(Application.persistentDataPath, fileName);
+
+        using (StreamWriter writer = new StreamWriter(path))
+        {
+            int rows = array.GetLength(0);
+            int cols = array.GetLength(1);
+
+            for (int i = 0; i < rows; i++)
+            {
+                string line = "";
+                for (int j = 0; j < cols; j++)
+                {
+                    line += array[i, j].ToString();
+                    if (j < cols - 1) line += "\t"; // tab-separated values
+                }
+                writer.WriteLine(line);
+            }
+        }
+
+        Debug.Log($"Array written to {path}");
     }
 
 
