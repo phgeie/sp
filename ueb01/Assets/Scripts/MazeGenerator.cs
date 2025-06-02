@@ -10,6 +10,7 @@ public class MazeGenerator : MonoBehaviour
     public GameObject ExtraroomPrefab;
     public GameObject WallPrefab;
     public GameObject MirrorPrefab;
+    public GameObject AbsorbPrefab;
     public GameObject TransparentPrefab;
     public GameObject GroundPrefab;
     public GameObject CeilingPrefab;
@@ -21,23 +22,50 @@ public class MazeGenerator : MonoBehaviour
     [Header("Maze Settings")]
     public int MazeWidth = 3;
     public int MazeHeight = 3;
+    public bool AlwaysGenerate = true;
+
     private float CellSize = 1f;
-
     private int[,] maze;
-
     private (int x, int y) entrance;
+    private (int x, int y) exit;
 
     void Start()
     {
-        if (MazeWidth < 3 || MazeHeight < 3) return;
-        GenerateMaze(MazeWidth, MazeHeight);
-        PlaceLightsInMaze();
-        ReplaceSomeWalls();
-        SpawnMaze();
-        PrintMaze();
-        SpawnCoin();
-        BuildEntranceRoom(new Vector2Int(entrance.x, entrance.y), 3, WallPrefab);
+        string path = Path.Combine(Application.dataPath, "Data/maze.txt");
 
+        int width = 0;
+        int height = 0;
+        if (!AlwaysGenerate){
+            try{
+                maze = ReadArrayFromFile(path);
+                width = maze.GetLength(0);
+                height = maze.GetLength(1);
+        
+                entrance =  FindSingleBorderValue(0);
+                exit =  FindSingleBorderValue(6);
+            }catch (Exception ex)
+            {
+                Debug.LogError($"Error reading maze file: {ex.Message}.");
+            }
+        }
+
+        if (width < 3 || height < 3 || entrance.x == -1 || exit.y != height - 2 || exit.x != width -1 || width % 2 == 0 || height % 2 == 0){
+            Debug.Log("Generating new maze.");
+            if (MazeWidth < 3 || MazeHeight < 3){
+                MazeWidth = 3;
+                MazeHeight = 3;
+            }
+            GenerateMaze(MazeWidth, MazeHeight);
+            PlaceLightsInMaze();
+            ReplaceSomeWalls();
+            WriteIntArrayToFile();
+        }
+        
+        PrintMaze();
+        SpawnMaze();
+        SpawnCoin();
+        BuildEntranceRoom();
+        SpawnPrefabAtExit();
     }
 
     public void GenerateMaze(int width, int height)
@@ -90,36 +118,21 @@ public class MazeGenerator : MonoBehaviour
         }
 
         // Add loops for complexity
-        AddLoops(rand, 0.05f); // 5% chance to break extra wall
+        AddLoops();
 
+        exit = (width - 1, height - 2);
 
-        // Pick exit 
-        // Set exit at bottom-right
-(int x, int y) exit = (width - 1, height - 2);
+        maze[exit.y, exit.x] = 6;
 
-// Ensure adjacent cell is path
-if (maze[exit.y, exit.x - 1] == 0 || maze[exit.y - 1, exit.x] == 0)
-{
-    maze[exit.y, exit.x] = 2;
-}
-else
-{
-    // Carve a path if not already connected
-    maze[height - 2, width - 2] = 0;
-    maze[height - 2, width - 1] = 2;
-}
-
-
-entrance = FindFarthestEdge(exit);
-maze[entrance.y, entrance.x] = 0;
-
-SpawnPrefabAtExit(exit);
+        entrance = FindFarthestEdge(exit);
+        maze[entrance.y, entrance.x] = 0;
     }
 
     public void ReplaceSomeWalls()
     {
         float mirrorChance = 0.1f;
-        float transparentChance = 0.05f;
+        float absorbChance = 0.1f;
+        float transparentChance = 0.1f;
         int width = maze.GetLength(0);
         int height = maze.GetLength(1);
         System.Random rng = new System.Random();
@@ -134,18 +147,24 @@ SpawnPrefabAtExit(exit);
 
                 if (!isBorder && rng.NextDouble() < transparentChance)
                 {
-                    maze[x, y] = 4; // transparent wall
+                    maze[x, y] = 3; // transparent wall
                 }
                 else if (rng.NextDouble() < mirrorChance)
                 {
-                    maze[x, y] = 3; // mirror wall
+                    maze[x, y] = 4; // mirror wall
+                }
+                else if (rng.NextDouble() < absorbChance)
+                {
+                    maze[x, y] = 2; // absorb wall
                 }
             }
         }
     }
 
-    private void AddLoops(System.Random rand, float loopChance)
+    private void AddLoops()
     {
+        System.Random rand = new System.Random();
+        float loopChance = 0.05f;
         int height = maze.GetLength(0);
         int width = maze.GetLength(1);
 
@@ -170,27 +189,6 @@ SpawnPrefabAtExit(exit);
                 }
             }
         }
-    }
-
-    private (int x, int y) PickRandomEdge(System.Random rand)
-    {
-        int height = maze.GetLength(0);
-        int width = maze.GetLength(1);
-        List<(int x, int y)> candidates = new();
-
-        for (int x = 1; x < width - 1; x += 2)
-        {
-            if (maze[1, x] == 0) candidates.Add((x, 0));             // top
-            if (maze[height - 2, x] == 0) candidates.Add((x, height - 1)); // bottom
-        }
-
-        for (int y = 1; y < height - 1; y += 2)
-        {
-            if (maze[y, 1] == 0) candidates.Add((0, y));             // left
-            if (maze[y, width - 2] == 0) candidates.Add((width - 1, y)); // right
-        }
-
-        return candidates[rand.Next(candidates.Count)];
     }
 
     private (int x, int y) FindFarthestEdge((int x, int y) start)
@@ -234,14 +232,13 @@ SpawnPrefabAtExit(exit);
             }
         }
 
-        // Snap farthest cell to nearest outer wall
-        List<(int x, int y)> exits = new()
+        List<(int x, int y)> farth = new()
         {
             (farthest.x, 0), (farthest.x, height - 1),
             (0, farthest.y), (width - 1, farthest.y)
         };
 
-        foreach (var (x, y) in exits)
+        foreach (var (x, y) in farth)
         {
             if (x >= 0 && y >= 0 && x < width && y < height)
             {
@@ -250,55 +247,16 @@ SpawnPrefabAtExit(exit);
             }
         }
 
-        return farthest; // fallback
+        return farthest;
     }
 
-public void SpawnPrefabAtExit((int x, int y) exit)
-{
-    Vector3 exitWorldPos = new Vector3(exit.x, 0f, exit.y);
-    Vector3 entryOffsetInPrefab = new Vector3(-1f, 0f, 4f); // prefab entry relative to its origin
-    Vector3 prefabOrigin = exitWorldPos - entryOffsetInPrefab;
-
-    GameObject instance = Instantiate(ExtraroomPrefab, prefabOrigin, Quaternion.identity);
-}
-
-
-    public void PrintMaze()
+    public void SpawnPrefabAtExit()
     {
-        WriteIntArrayToFile(maze, "maze.txt");
-        int height = maze.GetLength(0);
-        int width = maze.GetLength(1);
-        string s = "";
+        Vector3 exitWorldPos = new Vector3(exit.x, 0f, exit.y);
+        Vector3 entryOffsetInPrefab = new Vector3(-1f, 0f, 4f);
+        Vector3 prefabOrigin = exitWorldPos - entryOffsetInPrefab;
 
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-                if (maze[y, x] == 1)
-                    s += "<";
-                else if (maze[y, x] == 5)
-                {
-                    s += "-";
-                }
-                else if (maze[y, x] == 0)
-                {
-                    s += "0";
-                }
-                else if (maze[y, x] == 3)
-                {
-                    s += "M";
-                }
-                else if (maze[y, x] == 4)
-                {
-                    s += "T";
-                }
-                else
-                {
-                    s += "E";
-
-                }
-            s += "\n";
-        }
-        Debug.Log(s);
+        GameObject instance = Instantiate(ExtraroomPrefab, prefabOrigin, Quaternion.identity);
     }
 
     public void PlaceLightsInMaze()
@@ -359,8 +317,8 @@ public void SpawnPrefabAtExit((int x, int y) exit)
         GameObject ground = Instantiate(GroundPrefab, groundPos, Quaternion.identity);
 
         // Instantiate ceiling
-        Vector3 ceilingPos = new Vector3((width - 1) * CellSize / 2f, 1.5f, (height - 1) * CellSize / 2f); // Y = height above walls
-        GameObject ceiling = Instantiate(CeilingPrefab, ceilingPos, Quaternion.Euler(180f, 0f, 0f)); // Flip upside down
+        Vector3 ceilingPos = new Vector3((width - 1) * CellSize / 2f, 1.5f, (height - 1) * CellSize / 2f);
+        GameObject ceiling = Instantiate(CeilingPrefab, ceilingPos, Quaternion.Euler(180f, 0f, 0f));
 
         Vector3 ceilingScale = ceiling.transform.localScale;
         ceiling.transform.localScale = new Vector3(
@@ -369,12 +327,11 @@ public void SpawnPrefabAtExit((int x, int y) exit)
             ceilingScale.z * height * CellSize
         );
 
-        // Multiply the original prefab's localScale
-        Vector3 originalScale = ground.transform.localScale;
+        Vector3 groundScale = ground.transform.localScale;
         ground.transform.localScale = new Vector3(
-            originalScale.x * width * CellSize,
-            originalScale.y,
-            originalScale.z * height * CellSize
+            groundScale.x * width * CellSize,
+            groundScale.y,
+            groundScale.z * height * CellSize
         );
 
 
@@ -382,15 +339,20 @@ public void SpawnPrefabAtExit((int x, int y) exit)
         {
             for (int x = 0; x < width; x++)
             {
-                if (maze[y, x] == 4)
+                if (maze[y, x] == 3)
                 {
                     Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
                     Instantiate(TransparentPrefab, pos, Quaternion.identity, transform);
                 }
-                else if (maze[y, x] == 3)
+                else if (maze[y, x] == 4)
                 {
                     Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
                     Instantiate(MirrorPrefab, pos, Quaternion.identity, transform);
+                }
+                else if (maze[y, x] == 2)
+                {
+                    Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
+                    Instantiate(AbsorbPrefab, pos, Quaternion.identity, transform);
                 }
                 else if (maze[y, x] == 5)
                 {
@@ -403,27 +365,10 @@ public void SpawnPrefabAtExit((int x, int y) exit)
                     Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
                     Instantiate(WallPrefab, pos, Quaternion.identity, transform);
                 }
-                else if (maze[y, x] == 2)
+                else if (maze[y, x] == 6)
                 {
                     Vector3 pos = new Vector3(x * CellSize, 0.5f, y * CellSize);
-
-                    Vector3 mazeCenter = new Vector3((width - 1) * CellSize / 2f, 0f, (height - 1) * CellSize / 2f);
-                    Vector3 dir = (mazeCenter - pos).normalized;
-
-                    Quaternion rotation;
-
-                    // Snap direction to cardinal axis
-                    if (Mathf.Abs(dir.x) > Mathf.Abs(dir.z))
-                    {
-                        rotation = dir.x > 0 ? Quaternion.Euler(0, 90, 0) : Quaternion.Euler(0, -90, 0); // East or West
-                    }
-                    else
-                    {
-                        rotation = dir.z > 0 ? Quaternion.Euler(0, 0, 0) : Quaternion.Euler(0, 180, 0); // North or South
-                    }
-
-                    Instantiate(ExitPrefab, pos, rotation, transform);
-
+                    Instantiate(ExitPrefab, pos, Quaternion.identity, transform);
                 }
             }
         }
@@ -444,11 +389,9 @@ public void SpawnPrefabAtExit((int x, int y) exit)
                     emptyCells.Add((x, y));
             }
         }
-        Debug.Log(emptyCells.Count);
         if (emptyCells.Count == 0)
             return;
 
-        // Randomly choose one
         System.Random rand = new System.Random();
         var (cx, cy) = emptyCells[rand.Next(emptyCells.Count)];
         Vector3 pos = new Vector3(cx * CellSize, 0f, cy * CellSize);
@@ -456,11 +399,12 @@ public void SpawnPrefabAtExit((int x, int y) exit)
         Instantiate(CoinPrefab, pos, CoinPrefab.transform.rotation, transform);
     }
 
-
-    public void BuildEntranceRoom(Vector2Int entranceVector, int roomSize, GameObject wallPrefab)
+    public void BuildEntranceRoom()
     {
-        Vector2Int dir = GetRoomOffsetDirection(entranceVector); // Direction facing maze
-        Vector2Int roomCenter = entranceVector + dir * 2;         // One tile further from entrance
+        Vector2Int entranceVector = new Vector2Int(entrance.x, entrance.y);
+        int roomSize = 3;
+        Vector2Int dir = GetRoomOffsetDirection(entranceVector);
+        Vector2Int roomCenter = entranceVector + dir * 2;
 
         int half = roomSize / 2;
         Vector3 pos = new Vector3(0, 0, 0);
@@ -477,12 +421,9 @@ public void SpawnPrefabAtExit((int x, int y) exit)
                 if (dx == -dir.x && dy == -dir.y) continue;
 
                 pos = new Vector3(current.x * CellSize, 0.5f, current.y * CellSize);
-                Instantiate(wallPrefab, pos, Quaternion.identity);
+                Instantiate(WallPrefab, pos, Quaternion.identity);
             }
         }
-
-
-
 
         Vector3 groundPos = new Vector3(roomCenter.x, -0.5f, roomCenter.y);
         GameObject ground = Instantiate(GroundPrefab, groundPos, Quaternion.identity);
@@ -509,8 +450,6 @@ public void SpawnPrefabAtExit((int x, int y) exit)
         SpawnPlayer(roomCenter, entranceVector - roomCenter);
     }
 
-
-
     Vector2Int GetRoomOffsetDirection(Vector2Int entrance)
     {
         int width = maze.GetLength(0);
@@ -521,9 +460,8 @@ public void SpawnPrefabAtExit((int x, int y) exit)
         if (entrance.y == 0) return new Vector2Int(0, -1);
         if (entrance.y == height - 1) return new Vector2Int(0, 1);
 
-        return Vector2Int.zero; // fallback
+        return Vector2Int.zero;
     }
-
 
     void SpawnPlayer(Vector2Int roomCell, Vector2Int lookDirection)
     {
@@ -535,22 +473,22 @@ public void SpawnPrefabAtExit((int x, int y) exit)
     }
 
     
-    public void WriteIntArrayToFile(int[,] array, string fileName)
+    public void WriteIntArrayToFile()
     {
-        string path = Path.Combine(Application.persistentDataPath, fileName);
+        string path = Path.Combine(Application.dataPath, "Data/maze.txt");
 
         using (StreamWriter writer = new StreamWriter(path))
         {
-            int rows = array.GetLength(0);
-            int cols = array.GetLength(1);
+            int width = maze.GetLength(0);
+            int height = maze.GetLength(1);
 
-            for (int i = 0; i < rows; i++)
+            for (int i = 0; i < width; i++)
             {
                 string line = "";
-                for (int j = 0; j < cols; j++)
+                for (int j = 0; j < height; j++)
                 {
-                    line += array[i, j].ToString();
-                    if (j < cols - 1) line += "\t"; // tab-separated values
+                    line += maze[i, j].ToString();
+                    if (j < height - 1) line += "\t";
                 }
                 writer.WriteLine(line);
             }
@@ -559,7 +497,77 @@ public void SpawnPrefabAtExit((int x, int y) exit)
         Debug.Log($"Array written to {path}");
     }
 
+    int[,] ReadArrayFromFile(string path)
+    {
+        List<int[]> rows = new List<int[]>();
 
+        foreach (var line in File.ReadAllLines(path))
+        {
+            string[] tokens = line.Split('\t');
+            int[] intRow = new int[tokens.Length];
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                intRow[i] = int.Parse(tokens[i]);
+            }
+            rows.Add(intRow);
+        }
 
+        int rowCount = rows.Count;
+        int colCount = rows[0].Length;
+        int[,] array = new int[rowCount, colCount];
 
+        for (int i = 0; i < rowCount; i++)
+        {
+            for (int j = 0; j < colCount; j++)
+            {
+                array[i, j] = rows[i][j];
+            }
+        }
+
+        Debug.Log($"Array read from {path}");
+        return array;
+    }
+
+    void PrintMaze()
+    {
+        string debugOutput = "Array contents:\n";
+        int rows = maze.GetLength(0);
+        int cols = maze.GetLength(1);
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < cols; j++)
+            {
+                debugOutput += maze[i, j] + "\t";
+            }
+            debugOutput += "\n";
+        }
+        Debug.Log(debugOutput);
+    }
+
+    public (int x, int y) FindSingleBorderValue(int target)
+    {
+        int width = maze.GetLength(0);
+        int height = maze.GetLength(1);
+        (int x, int y) foundPos = (-1, -1); 
+        int count = 0;
+
+        for (int i = 0; i < width; i++)
+        {
+            for (int j = 0; j < height; j++)
+            {
+                bool isBorder = i == 0 || i == width - 1 || j == 0 || j == height - 1;
+                if (isBorder && maze[i, j] == target)
+                {
+                    count++;
+                    if (count > 1)
+                    {
+                        return (-1, -1);
+                    }
+                    foundPos = (j, i);
+                }
+            }
+        }
+
+        return foundPos;
+    }
 }

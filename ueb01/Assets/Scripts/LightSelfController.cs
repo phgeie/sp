@@ -4,15 +4,15 @@ using UnityEngine;
 
 public class LightSelfController : MonoBehaviour
 {
-    public Transform player;            // Assign player/camera here
-    public float activationDistance = 10f;
-    public LayerMask obstacleMask;      // LayerMask for walls or occluders
-    public float checkInterval = 1f;    // How often the light checks
-
+    private GameObject player;
+    public LayerMask obstacleMask;
+    private float activationDistance = 10f;
+    private float checkInterval = 0.2f;
     private Light lightComponent;
 
     void Start()
     {
+        player = GameObject.Find("Player");
         lightComponent = GetComponent<Light>();
         InvokeRepeating(nameof(UpdateLightState), 0f, checkInterval);
     }
@@ -22,7 +22,7 @@ public class LightSelfController : MonoBehaviour
         if (player == null || lightComponent == null)
             return;
 
-        float distance = Vector3.Distance(transform.position, player.position);
+        float distance = Vector3.Distance(transform.position, player.transform.position);
 
         if (distance > activationDistance)
         {
@@ -30,20 +30,16 @@ public class LightSelfController : MonoBehaviour
             return;
         }
 
-        // Check if player is visible (no wall in the way)
-        Vector3 direction = (player.position - transform.position).normalized;
+        Vector3 direction = (player.transform.position - transform.position).normalized;
         float rayDistance = distance;
 
         if (Physics.Raycast(transform.position, direction, out RaycastHit hit, rayDistance, obstacleMask))
         {
-            // Wall or obstacle hit
             lightComponent.enabled = false;
         }
         else
         {
-            // Clear line of sight
             lightComponent.enabled = true;
         }
     }
 }
-

@@ -4,10 +4,9 @@ using UnityEngine;
 
 public class CoinSpin : MonoBehaviour
 {
-    public float RotationSpeed = 50f;
-    public float BounceHeight = 0.25f;
-    public float BounceSpeed = 2f;
-
+    private float RotationSpeed = 50f;
+    private float BounceHeight = 0.25f;
+    private float BounceSpeed = 2f;
     private Vector3 startPos;
 
     void Start()
@@ -17,6 +16,10 @@ public class CoinSpin : MonoBehaviour
 
     void Update()
     {
+        RotateSpin();
+    }
+
+    void RotateSpin(){
         // Rotate around Y axis
         transform.Rotate(Vector3.up * RotationSpeed * Time.deltaTime, Space.World);
 
@@ -25,4 +28,3 @@ public class CoinSpin : MonoBehaviour
         transform.position = new Vector3(transform.position.x, newY, transform.position.z);
     }
 }
-
